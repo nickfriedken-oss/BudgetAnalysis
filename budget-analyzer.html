@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Budget Analyzer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1a18;
+    --ink-muted: #6b6b65;
+    --ink-faint: #a8a89e;
+    --paper: #f7f5f0;
+    --paper-warm: #efecea;
+    --paper-card: #ffffff;
+    --rule: #e0ddd6;
+    --accent: #2a5c45;
+    --accent-mid: #4a8c6a;
+    --danger: #8b2e2e;
+    --danger-light: #fdf0f0;
+    --warn: #7a5010;
+    --warn-light: #fdf4e3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Mono', monospace; background: var(--paper); color: var(--ink); min-height: 100vh; }
+
+  .page-header {
+    background: var(--ink); color: var(--paper);
+    padding: 2.5rem 3rem 2rem; position: relative; overflow: hidden;
+  }
+  .page-header::before { content:''; position:absolute; top:-40px; right:-40px; width:220px; height:220px; border:1px solid rgba(255,255,255,0.07); border-radius:50%; }
+  .page-header::after  { content:''; position:absolute; top:-80px; right:-80px; width:320px; height:320px; border:1px solid rgba(255,255,255,0.04); border-radius:50%; }
+  .header-eyebrow { font-size:10px; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255,255,255,0.4); margin-bottom:0.5rem; }
+  .header-title { font-family:'DM Serif Display',serif; font-size:2.4rem; font-weight:400; line-height:1.1; }
+  .header-sub { font-size:12px; color:rgba(255,255,255,0.45); margin-top:0.6rem; }
+
+  .mode-tabs { display:flex; border-bottom:1px solid var(--rule); background:var(--paper-card); }
+  .mode-tab {
+    font-family:'DM Mono',monospace; font-size:12px; letter-spacing:0.06em;
+    padding:14px 28px; cursor:pointer; border:none; background:none;
+    color:var(--ink-faint); border-bottom:2px solid transparent; margin-bottom:-1px;
+    transition:all 0.15s; line-height:1.4;
+  }
+  .mode-tab.active { color:var(--ink); border-bottom-color:var(--ink); font-weight:500; }
+  .mode-tab:hover:not(.active) { color:var(--ink-muted); }
+  .mode-tab span { font-size:10px; color:inherit; opacity:0.6; display:block; }
+
+  .main { max-width:900px; margin:0 auto; padding:2.5rem 2rem 4rem; }
+  .tab-panel { display:none; }
+  .tab-panel.active { display:block; }
+
+  .section-label { font-size:10px; letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:1px solid var(--rule); }
+  .input-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:2rem; }
+  .field { display:flex; flex-direction:column; gap:6px; }
+  .field label { font-size:11px; color:var(--ink-muted); letter-spacing:0.04em; }
+  .field input {
+    font-family:'DM Mono',monospace; font-size:14px; padding:10px 14px;
+    background:var(--paper-card); border:1px solid var(--rule); border-radius:6px;
+    color:var(--ink); outline:none; transition:border-color 0.15s; width:100%;
+  }
+  .field input:focus { border-color:var(--accent-mid); }
+  .field input::placeholder { color:var(--ink-faint); }
+
+  .row-grid-analyze { display:grid; grid-template-columns:1fr 130px 130px 36px; gap:8px; align-items:center; margin-bottom:8px; }
+  .row-grid-plan    { display:grid; grid-template-columns:1fr 120px 130px 36px; gap:8px; align-items:center; margin-bottom:8px; }
+
+  .row-grid-analyze input,
+  .row-grid-analyze select,
+  .row-grid-plan input,
+  .row-grid-plan select {
+    font-family:'DM Mono',monospace; font-size:13px; padding:8px 12px;
+    background:var(--paper-card); border:1px solid var(--rule); border-radius:6px;
+    color:var(--ink); outline:none; transition:border-color 0.15s; width:100%;
+  }
+  .row-grid-analyze input:focus, .row-grid-analyze select:focus,
+  .row-grid-plan input:focus, .row-grid-plan select:focus { border-color:var(--accent-mid); }
+  input::placeholder { color:var(--ink-faint); }
+  .col-header { font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); padding:0 4px; }
+
+  /* Plan mode computed cell */
+  .computed-cell {
+    font-size:13px; font-weight:500; color:var(--accent); padding:8px 12px;
+    background:var(--paper-warm); border:1px solid var(--rule); border-radius:6px;
+    text-align:right; min-height:36px; display:flex; align-items:center; justify-content:flex-end;
+  }
+
+  .btn-remove {
+    width:34px; height:34px; background:none; border:1px solid var(--rule); border-radius:6px;
+    cursor:pointer; color:var(--ink-faint); font-size:16px; display:flex; align-items:center;
+    justify-content:center; transition:all 0.15s; flex-shrink:0;
+  }
+  .btn-remove:hover { background:var(--danger-light); border-color:var(--danger); color:var(--danger); }
+  .btn-add {
+    font-family:'DM Mono',monospace; font-size:12px; padding:8px 16px; background:none;
+    border:1px dashed var(--rule); border-radius:6px; color:var(--ink-muted); cursor:pointer;
+    transition:all 0.15s; letter-spacing:0.04em; margin-bottom:1.5rem; display:block;
+  }
+  .btn-add:hover { border-color:var(--accent-mid); color:var(--accent); }
+  .btn-run {
+    font-family:'DM Mono',monospace; font-size:13px; font-weight:500; padding:14px 32px;
+    background:var(--ink); color:var(--paper); border:none; border-radius:8px;
+    cursor:pointer; letter-spacing:0.06em; transition:all 0.15s; display:block; width:100%;
+  }
+  .btn-run:hover { background:#2f2f2a; transform:translateY(-1px); }
+  .btn-run:active { transform:translateY(0); }
+
+  /* Allocation meter */
+  .alloc-meter {
+    background:var(--paper-card); border:1px solid var(--rule); border-radius:10px;
+    padding:1rem 1.25rem; margin-bottom:1.5rem;
+  }
+  .alloc-top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .alloc-title { font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-faint); }
+  .alloc-pct { font-size:1.5rem; font-weight:500; transition:color 0.2s; }
+  .alloc-track { height:10px; background:var(--paper-warm); border-radius:5px; overflow:hidden; }
+  .alloc-fill { height:100%; border-radius:5px; transition:width 0.2s, background 0.2s; }
+  .alloc-sub { display:flex; justify-content:space-between; font-size:11px; color:var(--ink-faint); margin-top:6px; }
+
+  .input-mode-toggle { display:flex; gap:6px; margin-bottom:1rem; }
+  .toggle-btn {
+    font-family:'DM Mono',monospace; font-size:11px; padding:5px 14px; border-radius:20px;
+    cursor:pointer; transition:all 0.15s; letter-spacing:0.04em;
+    border:1px solid var(--rule); background:none; color:var(--ink-muted);
+  }
+  .toggle-btn.active { background:var(--ink); color:var(--paper); border-color:var(--ink); }
+
+  .divider { border:none; border-top:1px solid var(--rule); margin:2.5rem 0; }
+  .error-msg { font-size:11px; color:var(--danger); margin-top:6px; display:none; }
+  .results-section { display:none; animation:fadeUp 0.4s ease; }
+  @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+
+  .metric-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:2rem; }
+  .metric-card { background:var(--paper-card); border:1px solid var(--rule); border-radius:10px; padding:1rem; }
+  .m-label { font-size:10px; color:var(--ink-faint); letter-spacing:0.1em; text-transform:uppercase; margin-bottom:4px; }
+  .m-val { font-size:1.4rem; font-weight:500; color:var(--ink); }
+  .m-sub { font-size:11px; color:var(--ink-faint); margin-top:2px; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:1.25rem; margin-bottom:1.25rem; }
+  .panel { background:var(--paper-card); border:1px solid var(--rule); border-radius:10px; padding:1.25rem 1.5rem; }
+  .panel-title { font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--ink-faint); margin-bottom:1rem; padding-bottom:0.5rem; border-bottom:1px solid var(--rule); }
+
+  .flow-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; border-bottom:1px solid var(--rule); }
+  .flow-row:last-child { border-bottom:none; }
+  .flow-label { color:var(--ink-muted); }
+  .flow-val { font-weight:500; }
+  .flow-total { display:flex; justify-content:space-between; padding-top:10px; margin-top:4px; border-top:1px solid var(--ink); font-weight:500; }
+
+  .bar-item { margin-bottom:10px; }
+  .bar-top { display:flex; justify-content:space-between; font-size:12px; color:var(--ink-muted); margin-bottom:4px; }
+  .bar-track { height:8px; background:var(--paper-warm); border-radius:4px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:4px; transition:width 0.5s cubic-bezier(0.4,0,0.2,1); }
+
+  .insight-box { background:var(--paper-warm); border-left:3px solid var(--accent-mid); border-radius:0 8px 8px 0; padding:0.9rem 1.1rem; font-size:12px; color:var(--ink-muted); line-height:1.7; margin-top:1.25rem; }
+  .insight-box strong { color:var(--ink); font-weight:500; }
+  .surplus-positive { color:var(--accent); }
+  .surplus-negative { color:var(--danger); }
+  .color-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+
+  .plan-table { width:100%; border-collapse:collapse; font-size:13px; }
+  .plan-table th { font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-faint); text-align:left; padding:6px 8px; border-bottom:1px solid var(--rule); font-weight:400; }
+  .plan-table th:not(:first-child) { text-align:right; }
+  .plan-table td { padding:7px 8px; border-bottom:1px solid var(--rule); color:var(--ink-muted); vertical-align:middle; }
+  .plan-table td:not(:first-child) { text-align:right; font-weight:500; color:var(--ink); }
+  .plan-table tr:last-child td { border-bottom:none; }
+  .type-badge { font-size:10px; padding:2px 7px; border-radius:10px; font-weight:400; margin-left:6px; }
+  .badge-expense    { background:#fdf0f0; color:#8b2e2e; }
+  .badge-savings    { background:#fdf4e3; color:#7a5010; }
+  .badge-investment { background:#eaf3ee; color:#2a5c45; }
+
+  @media (max-width:680px) {
+    .page-header { padding:1.5rem; }
+    .header-title { font-size:1.8rem; }
+    .main { padding:1.5rem 1rem 3rem; }
+    .input-grid { grid-template-columns:1fr; }
+    .metric-grid { grid-template-columns:1fr 1fr; }
+    .two-col { grid-template-columns:1fr; }
+    .row-grid-analyze, .row-grid-plan { grid-template-columns:1fr 100px 36px; }
+    .row-grid-analyze .type-col, .row-grid-plan .type-col { display:none; }
+    .mode-tab { padding:12px 14px; font-size:11px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="header-eyebrow">Personal Finance</div>
+  <div class="header-title">Budget Analyzer</div>
+  <div class="header-sub">Analyze your current spending — or plan a target budget by percentage.</div>
+</div>
+
+<div class="mode-tabs">
+  <button class="mode-tab active" onclick="switchMode('analyze')">
+    Analyze
+    <span>Enter amounts → get insights</span>
+  </button>
+  <button class="mode-tab" onclick="switchMode('plan')">
+    Plan
+    <span>Set % targets → get dollar amounts</span>
+  </button>
+</div>
+
+<div class="main">
+
+  <!-- ══ ANALYZE ══ -->
+  <div id="panel-analyze" class="tab-panel active">
+
+    <div class="section-label">Income</div>
+    <div class="input-grid">
+      <div class="field"><label>Annual gross salary</label><input type="number" id="a-gross" placeholder="58500" value="58500"></div>
+      <div class="field"><label>Annual post-tax income</label><input type="number" id="a-posttax" placeholder="52780" value="52780"></div>
+      <div class="field"><label>Employer 401k match (% of gross salary)</label><input type="number" id="a-match" placeholder="4.9" value="4.9" step="0.1" min="0" max="100"></div>
+      <div class="field"><label>Employer 401k bonus contribution (annual)</label><input type="number" id="a-bonus" placeholder="2500" value="2500"></div>
+    </div>
+
+    <div class="section-label">Monthly spending & investments</div>
+    <div class="input-mode-toggle">
+      <button class="toggle-btn active" id="a-btn-dollar" onclick="setAMode('$')">$ Amount</button>
+      <button class="toggle-btn" id="a-btn-pct" onclick="setAMode('%')">% of take-home</button>
+    </div>
+    <div class="row-grid-analyze" style="margin-bottom:4px;">
+      <div class="col-header">Category</div>
+      <div class="col-header" id="a-amt-header">Amount / mo</div>
+      <div class="col-header type-col">Type</div>
+      <div></div>
+    </div>
+    <div id="a-rows"></div>
+    <button class="btn-add" onclick="aAdd()">+ add category</button>
+    <div id="a-err" class="error-msg">Please enter gross and post-tax income first.</div>
+    <button class="btn-run" onclick="runAnalyze()">Analyze my budget →</button>
+
+    <hr class="divider">
+    <div id="a-results" class="results-section">
+      <div class="section-label">Your analysis</div>
+      <div class="metric-grid" id="a-metrics"></div>
+      <div class="two-col">
+        <div class="panel"><div class="panel-title">Monthly cash flow</div><div id="a-cashflow"></div></div>
+        <div class="panel"><div class="panel-title">Spending breakdown</div><div id="a-bars"></div></div>
+      </div>
+      <div class="panel" style="margin-bottom:1.25rem;">
+        <div class="panel-title">Annual picture</div><div id="a-annual"></div>
+      </div>
+      <div id="a-insights"></div>
+    </div>
+  </div>
+
+  <!-- ══ PLAN ══ -->
+  <div id="panel-plan" class="tab-panel">
+
+    <div class="section-label">Income</div>
+    <div class="input-grid">
+      <div class="field"><label>Annual gross salary</label><input type="number" id="p-gross" placeholder="58500" value="58500" oninput="planLive()"></div>
+      <div class="field"><label>Annual post-tax income</label><input type="number" id="p-posttax" placeholder="52780" value="52780" oninput="planLive()"></div>
+      <div class="field"><label>Employer 401k match (% of gross salary)</label><input type="number" id="p-match" placeholder="4.9" value="4.9" step="0.1" min="0" max="100" oninput="planLive()"></div>
+      <div class="field"><label>Employer 401k bonus contribution (annual)</label><input type="number" id="p-bonus" placeholder="2500" value="2500" oninput="planLive()"></div>
+    </div>
+
+    <div class="section-label">Target allocations — % of monthly take-home</div>
+
+    <div class="alloc-meter">
+      <div class="alloc-top">
+        <span class="alloc-title">Total allocated</span>
+        <span class="alloc-pct" id="p-meter-pct">0%</span>
+      </div>
+      <div class="alloc-track"><div class="alloc-fill" id="p-meter-fill" style="width:0%;background:var(--accent-mid);"></div></div>
+      <div class="alloc-sub">
+        <span id="p-meter-left">Enter percentages below</span>
+        <span id="p-meter-right"></span>
+      </div>
+    </div>
+
+    <div class="row-grid-plan" style="margin-bottom:4px;">
+      <div class="col-header">Category</div>
+      <div class="col-header">% of take-home</div>
+      <div class="col-header type-col">Type</div>
+      <div></div>
+    </div>
+    <div id="p-rows"></div>
+    <button class="btn-add" onclick="pAdd()">+ add category</button>
+    <div id="p-err" class="error-msg">Please enter gross and post-tax income first.</div>
+    <button class="btn-run" onclick="runPlan()">Calculate my target amounts →</button>
+
+    <hr class="divider">
+    <div id="p-results" class="results-section">
+      <div class="section-label">Your target budget</div>
+      <div class="metric-grid" id="p-metrics"></div>
+      <div class="panel" style="margin-bottom:1.25rem;">
+        <div class="panel-title">Monthly targets — every category</div>
+        <table class="plan-table" id="p-table"></table>
+      </div>
+      <div class="two-col">
+        <div class="panel"><div class="panel-title">Spending breakdown</div><div id="p-bars"></div></div>
+        <div class="panel"><div class="panel-title">Annual targets</div><div id="p-annual"></div></div>
+      </div>
+      <div id="p-insights"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const COLORS = ['#2a5c45','#2b4d7a','#4a3575','#b07d2a','#8b2e2e','#1d6e6e','#5a3a1a','#3a5a2a','#6b3a5a','#2a3a6b'];
+const fmt  = n => '$' + Math.round(n).toLocaleString();
+const fmtP = (n, d=1) => n.toFixed(d) + '%';
+
+/* ── Mode switch ── */
+function switchMode(m) {
+  ['analyze','plan'].forEach(id => {
+    document.getElementById('panel-'+id).classList.toggle('active', id===m);
+  });
+  document.querySelectorAll('.mode-tab').forEach((t,i) => t.classList.toggle('active', (m==='analyze'&&i===0)||(m==='plan'&&i===1)));
+}
+
+/* ══════════════════════
+   ANALYZE MODE
+══════════════════════ */
+let aMode = '$';
+
+const aDefaults = [
+  { name:'Rent', val:1100, type:'expense' },
+  { name:'Other spending', val:1050, type:'expense' },
+  { name:'Vacation fund', val:217, type:'savings' },
+  { name:'401k (employee)', val:260, type:'investment' },
+  { name:'Brokerage', val:1500, type:'investment' },
+  { name:'Roth IRA (annual ÷12)', val:625, type:'investment' },
+];
+
+function setAMode(m) {
+  aMode = m;
+  document.getElementById('a-btn-dollar').classList.toggle('active', m==='$');
+  document.getElementById('a-btn-pct').classList.toggle('active', m==='%');
+  document.getElementById('a-amt-header').textContent = m==='$' ? 'Amount / mo' : '% of take-home';
+}
+
+function aAdd(d) {
+  const c = document.getElementById('a-rows');
+  const div = document.createElement('div');
+  div.className = 'row-grid-analyze';
+  div.innerHTML = `
+    <input type="text" placeholder="Category name" class="n" value="${d?escH(d.name):''}">
+    <input type="number" placeholder="0" class="v" min="0" step="1" value="${d?d.val:''}">
+    <select class="t type-col">
+      <option value="expense"    ${d&&d.type==='expense'?'selected':''}>Expense</option>
+      <option value="savings"    ${d&&d.type==='savings'?'selected':''}>Savings</option>
+      <option value="investment" ${d&&d.type==='investment'?'selected':''}>Investment</option>
+    </select>
+    <button class="btn-remove" onclick="this.closest('.row-grid-analyze').remove()">×</button>`;
+  c.appendChild(div);
+}
+
+function runAnalyze() {
+  const gross   = +document.getElementById('a-gross').value;
+  const postTax = +document.getElementById('a-posttax').value;
+  const matchPct = +document.getElementById('a-match').value||0;
+  const match    = (matchPct/100) * gross / 12;
+  const bonus   = +document.getElementById('a-bonus').value||0;
+  if (!gross||!postTax) { document.getElementById('a-err').style.display='block'; return; }
+  document.getElementById('a-err').style.display='none';
+  const ptMo = postTax/12, gMo = gross/12;
+
+  const items = [];
+  document.querySelectorAll('#a-rows .row-grid-analyze').forEach((row,i) => {
+    const name = row.querySelector('.n').value.trim();
+    const raw  = +row.querySelector('.v').value||0;
+    const type = row.querySelector('.t').value;
+    const amt  = aMode==='%' ? raw/100*ptMo : raw;
+    if (name&&amt>0) items.push({name,amount:amt,type,color:COLORS[i%COLORS.length]});
+  });
+
+  const totalOut = items.reduce((s,i)=>s+i.amount,0);
+  const expenses = items.filter(i=>i.type==='expense').reduce((s,i)=>s+i.amount,0);
+  const savings  = items.filter(i=>i.type==='savings').reduce((s,i)=>s+i.amount,0);
+  const invest   = items.filter(i=>i.type==='investment').reduce((s,i)=>s+i.amount,0);
+  const cash     = ptMo - totalOut;
+  const real     = cash + match;
+  const invAnn   = (invest+match)*12 + bonus;
+  const savRate  = gross>0 ? invAnn/gross*100 : 0;
+
+  // Metrics
+  document.getElementById('a-metrics').innerHTML = metricCards([
+    ['Take-home / mo', fmt(ptMo), fmt(postTax)+'/yr'],
+    ['Monthly surplus', (real>=0?'+':'')+fmt(real), 'incl. employer match', real>=0?'surplus-positive':'surplus-negative'],
+    ['Invested / yr', fmt(invAnn), fmtP(savRate)+' of gross'],
+    ['Expenses / mo', fmt(expenses), fmtP(ptMo>0?expenses/ptMo*100:0)+' of take-home'],
+  ]);
+
+  // Cash flow
+  let cf = `<div class="flow-row"><span class="flow-label">Take-home</span><span class="flow-val surplus-positive">+ ${fmt(ptMo)}</span></div>`;
+  items.forEach(it => cf += `<div class="flow-row"><span class="flow-label">${escH(it.name)}</span><span class="flow-val">− ${fmt(it.amount)}</span></div>`);
+  cf += `<div class="flow-total"><span>Cash balance</span><span class="${cash>=0?'surplus-positive':'surplus-negative'}">${cash>=0?'+':''}${fmt(cash)}</span></div>`;
+  if (match>0) {
+    cf += `<div class="flow-row" style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);"><span class="flow-label" style="font-size:11px;">+ employer 401k match (${matchPct}% of gross)</span><span class="flow-val surplus-positive" style="font-size:11px;">+ ${fmt(match)}</span></div>`;
+    cf += `<div class="flow-total"><span>Real surplus</span><span class="${real>=0?'surplus-positive':'surplus-negative'}">${real>=0?'+':''}${fmt(real)}</span></div>`;
+  }
+  document.getElementById('a-cashflow').innerHTML = cf;
+
+  renderBars('a-bars', items, totalOut);
+  renderAnnual('a-annual', {gross,postTax,bonus,expenses,savings,invest,match,invAnn,savRate});
+  renderInsights('a-insights', {savRate,items,ptMo,bonus,real,match});
+
+  show('a-results');
+}
+
+/* ══════════════════════
+   PLAN MODE
+══════════════════════ */
+const pDefaults = [
+  { name:'Rent',             pct:25.1, type:'expense' },
+  { name:'Other spending',   pct:24.0, type:'expense' },
+  { name:'Vacation fund',    pct:5.0,  type:'savings' },
+  { name:'401k (employee)',  pct:5.9,  type:'investment' },
+  { name:'Brokerage',        pct:34.3, type:'investment' },
+  { name:'Roth IRA (÷12)',   pct:14.3, type:'investment' },
+];
+
+function pAdd(d) {
+  const c = document.getElementById('p-rows');
+  const div = document.createElement('div');
+  div.className = 'row-grid-plan';
+  const ptMo = (+document.getElementById('p-posttax').value||0)/12;
+  const computedAmt = d && ptMo>0 ? fmt(d.pct/100*ptMo) : '—';
+  div.innerHTML = `
+    <input type="text" placeholder="Category name" class="n" value="${d?escH(d.name):''}">
+    <input type="number" placeholder="0.0" class="pct" min="0" max="200" step="0.1" value="${d?d.pct:''}" oninput="planLive()">
+    <select class="t type-col">
+      <option value="expense"    ${d&&d.type==='expense'?'selected':''}>Expense</option>
+      <option value="savings"    ${d&&d.type==='savings'?'selected':''}>Savings</option>
+      <option value="investment" ${d&&d.type==='investment'?'selected':''}>Investment</option>
+    </select>
+    <button class="btn-remove" onclick="this.closest('.row-grid-plan').remove();planLive()">×</button>`;
+  c.appendChild(div);
+  planLive();
+}
+
+function planLive() {
+  const ptMo = (+document.getElementById('p-posttax').value||0)/12;
+  let total = 0;
+  document.querySelectorAll('#p-rows .pct').forEach(inp => total += +inp.value||0);
+
+  const pctEl  = document.getElementById('p-meter-pct');
+  const fillEl = document.getElementById('p-meter-fill');
+  const leftEl = document.getElementById('p-meter-left');
+  const rightEl= document.getElementById('p-meter-right');
+
+  pctEl.textContent = total.toFixed(1)+'%';
+  fillEl.style.width = Math.min(total,100)+'%';
+  const over = total>100;
+  const close = total>90 && !over;
+  fillEl.style.background = over?'var(--danger)':close?'var(--warn)':'var(--accent-mid)';
+  pctEl.style.color = over?'var(--danger)':close?'var(--warn)':'var(--ink)';
+
+  const remain = 100 - total;
+  if (ptMo>0) {
+    leftEl.textContent = over
+      ? `Over by ${Math.abs(remain).toFixed(1)}% — reduce allocations`
+      : `${remain.toFixed(1)}% unallocated`;
+    rightEl.textContent = over ? '' : remain>0 ? fmt(remain/100*ptMo)+'/mo unallocated' : 'Fully allocated';
+  } else {
+    leftEl.textContent = 'Enter post-tax income above';
+    rightEl.textContent = '';
+  }
+
+  // Live-update computed cells
+  document.querySelectorAll('#p-rows .row-grid-plan').forEach(row => {
+    const pct = +row.querySelector('.pct').value||0;
+    const cell = row.querySelector('.computed-cell');
+    if (cell) cell.textContent = ptMo>0 && pct>0 ? fmt(pct/100*ptMo)+'/mo' : '—';
+  });
+}
+
+function runPlan() {
+  const gross   = +document.getElementById('p-gross').value;
+  const postTax = +document.getElementById('p-posttax').value;
+  const matchPct = +document.getElementById('p-match').value||0;
+  const match    = (matchPct/100) * gross / 12;
+  const bonus   = +document.getElementById('p-bonus').value||0;
+  if (!gross||!postTax) { document.getElementById('p-err').style.display='block'; return; }
+  document.getElementById('p-err').style.display='none';
+  const ptMo = postTax/12;
+
+  const items = [];
+  document.querySelectorAll('#p-rows .row-grid-plan').forEach((row,i) => {
+    const name = row.querySelector('.n').value.trim();
+    const pct  = +row.querySelector('.pct').value||0;
+    const type = row.querySelector('.t').value;
+    if (name&&pct>0) items.push({name,pct,amount:pct/100*ptMo,type,color:COLORS[i%COLORS.length]});
+  });
+
+  const totalOut = items.reduce((s,i)=>s+i.amount,0);
+  const totalPct = items.reduce((s,i)=>s+i.pct,0);
+  const expenses = items.filter(i=>i.type==='expense').reduce((s,i)=>s+i.amount,0);
+  const savings  = items.filter(i=>i.type==='savings').reduce((s,i)=>s+i.amount,0);
+  const invest   = items.filter(i=>i.type==='investment').reduce((s,i)=>s+i.amount,0);
+  const unallocAmt = ptMo - totalOut;
+  const unallocPct = 100 - totalPct;
+  const invAnn   = (invest+match)*12 + bonus;
+  const savRate  = gross>0 ? invAnn/gross*100 : 0;
+
+  document.getElementById('p-metrics').innerHTML = metricCards([
+    ['Take-home / mo', fmt(ptMo), fmt(postTax)+'/yr'],
+    ['Unallocated', (unallocAmt>=0?'+':'')+fmt(unallocAmt), fmtP(Math.abs(unallocPct))+(unallocPct>=0?' remaining':' over'), unallocAmt>=0?'surplus-positive':'surplus-negative'],
+    ['Invested / yr', fmt(invAnn), fmtP(savRate)+' of gross'],
+    ['Expenses / mo', fmt(expenses), fmtP(ptMo>0?expenses/ptMo*100:0)+' of take-home'],
+  ]);
+
+  // Table
+  let rows = `<thead><tr><th>Category</th><th>% target</th><th>Monthly $</th><th>Annual $</th></tr></thead><tbody>`;
+  items.forEach(it => {
+    rows += `<tr>
+      <td>${escH(it.name)}<span class="type-badge badge-${it.type}">${it.type}</span></td>
+      <td>${it.pct.toFixed(1)}%</td>
+      <td>${fmt(it.amount)}</td>
+      <td>${fmt(it.amount*12)}</td>
+    </tr>`;
+  });
+  if (unallocPct>0.05) {
+    rows += `<tr style="opacity:0.55;font-style:italic;">
+      <td>Unallocated</td>
+      <td>${unallocPct.toFixed(1)}%</td>
+      <td>${fmt(unallocAmt)}</td>
+      <td>${fmt(unallocAmt*12)}</td>
+    </tr>`;
+  }
+  rows += '</tbody>';
+  document.getElementById('p-table').innerHTML = rows;
+
+  renderBars('p-bars', items, totalOut+(unallocAmt>0?unallocAmt:0));
+  renderAnnual('p-annual', {gross,postTax,bonus,expenses,savings,invest,match,invAnn,savRate});
+  renderInsights('p-insights', {savRate,items,ptMo,bonus,real:unallocAmt+match,match,planMode:true,unallocPct});
+
+  show('p-results');
+}
+
+/* ══════════════════════
+   SHARED HELPERS
+══════════════════════ */
+function metricCards(cards) {
+  return cards.map(([label,val,sub,cls]) =>
+    `<div class="metric-card"><div class="m-label">${label}</div><div class="m-val${cls?' '+cls:''}">${val}</div>${sub?`<div class="m-sub">${sub}</div>`:''}</div>`
+  ).join('');
+}
+
+function renderBars(id, items, total) {
+  const sorted = [...items].sort((a,b)=>b.amount-a.amount);
+  const raws   = sorted.map(i=>total>0?i.amount/total*100:0);
+  const floors = raws.map(Math.floor);
+  let rem      = 100 - floors.reduce((a,b)=>a+b,0);
+  raws.map((r,i)=>({d:r-floors[i],i})).sort((a,b)=>b.d-a.d).slice(0,Math.max(rem,0)).forEach(({i})=>floors[i]++);
+  document.getElementById(id).innerHTML = sorted.map((it,i)=>`
+    <div class="bar-item">
+      <div class="bar-top">
+        <span><span class="color-dot" style="background:${it.color}"></span>${escH(it.name)}</span>
+        <span>${fmt(it.amount)} · ${floors[i]}%</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${floors[i]}%;background:${it.color};"></div></div>
+    </div>`).join('');
+}
+
+function renderAnnual(id, d) {
+  const {gross,postTax,bonus,expenses,savings,invest,match,invAnn,savRate} = d;
+  const rows = [
+    {l:'Gross salary',              v:gross},
+    {l:'Post-tax income',           v:postTax},
+    {l:'Total expenses',            v:expenses*12, neg:true},
+    {l:'Total savings',             v:savings*12, neg:true, skip:!savings},
+    {l:'Total invested (employee)', v:invest*12, neg:true},
+    {l:'Employer match (annual)',     v:match*12, skip:!match},
+    {l:'Employer 401k bonus',       v:bonus, skip:!bonus},
+    {l:'Total invested (incl. employer)', v:invAnn, bold:true},
+    {l:'Net savings rate (of gross)',  pct:savRate, bold:true},
+  ];
+  let h = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">';
+  rows.filter(r=>!r.skip).forEach(r=>{
+    const v  = r.pct!=null ? fmtP(r.pct) : fmt(r.v);
+    const c  = r.bold?'var(--ink)':r.neg?'var(--danger)':'var(--ink-muted)';
+    const w  = r.bold?'500':'400';
+    const b  = r.bold?'1px solid var(--ink)':'1px solid var(--rule)';
+    h += `<div style="padding:5px 0;font-size:12px;color:${c};font-weight:${w};border-bottom:${b};">${r.l}</div>
+          <div style="padding:5px 0;font-size:12px;color:${c};font-weight:${w};border-bottom:${b};text-align:right;">${r.neg?'− ':''}${v}</div>`;
+  });
+  document.getElementById(id).innerHTML = h+'</div>';
+}
+
+function renderInsights(id, d) {
+  const {savRate,items,ptMo,bonus,real,match,planMode,unallocPct} = d;
+  let t = '';
+  if (savRate>40) t+=`<strong>Exceptional savings rate</strong> of ${fmtP(savRate)} — well above the 15–20% benchmark. Your future self will thank you. `;
+  else if (savRate>20) t+=`<strong>Strong savings rate</strong> of ${fmtP(savRate)} — above the 15–20% rule of thumb. `;
+  else if (savRate>0) t+=`<strong>Savings rate of ${fmtP(savRate)}</strong> — consider increasing contributions where possible. `;
+
+  const rentIt = items.find(i=>i.name.toLowerCase().includes('rent'));
+  if (rentIt) {
+    const rp = rentIt.amount/ptMo*100;
+    t += rp<30
+      ? `Housing at <strong>${fmtP(rp)} of take-home</strong> is within the recommended 30% ceiling. `
+      : `Housing is <strong>${fmtP(rp)} of take-home</strong> — above the 30% guideline; watch other expenses. `;
+  }
+
+  if (bonus>0) t+=`Your <strong>${fmt(bonus)} employer 401k bonus</strong> goes directly into your 401k on top of the monthly match — boosting your invested total without affecting take-home cash flow. `;
+
+  if (planMode && unallocPct>0.05) t+=`You have <strong>${fmtP(unallocPct)} unallocated</strong> — consider directing this toward an emergency fund or higher investment contributions. `;
+  else if (real<0) t+=`⚠ Monthly outflows exceed take-home by <strong>${fmt(Math.abs(real))}</strong> even after employer match — review contribution levels.`;
+  else if (match>0) t+=`The employer 401k match (<strong>${fmt(match)}/mo · ${fmt(match*12)}/yr</strong>) boosts your invested total without touching take-home cash flow.`;
+
+  document.getElementById(id).innerHTML = `<div class="insight-box">${t}</div>`;
+}
+
+function show(id) {
+  const el = document.getElementById(id);
+  el.style.display = 'block';
+  setTimeout(() => el.scrollIntoView({behavior:'smooth',block:'start'}), 50);
+}
+
+function escH(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Init ── */
+aDefaults.forEach(d => aAdd(d));
+pDefaults.forEach(d => pAdd(d));
+</script>
+</body>
+</html>
